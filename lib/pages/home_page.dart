@@ -1,8 +1,5 @@
-import 'dart:developer';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:g9_learn_http/models/all_product.dart';
 import 'package:g9_learn_http/models/product_model.dart';
 import 'package:g9_learn_http/services/network_service.dart';
 
@@ -16,16 +13,26 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   bool isLoading = false;
 
-  late List<Product> productModel;
+  late List<ProductModel> productList;
+
+  TextEditingController titleController = TextEditingController();
+  TextEditingController descController = TextEditingController();
+  TextEditingController priceController = TextEditingController();
 
 
   // fetch data
   Future<void> getAllData() async {
+
+    isLoading = false;
+
     // String
     String result = await NetworkService.GET(NetworkService.apiGetAllData);
 
     // Map => Object
-    productModel = productFromJson(result);
+    productList = productModelFromJson(result);
+
+    isLoading = true;
+
     setState(() {});
   }
 
@@ -33,9 +40,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> deleteData(int id)async{
     String result = await NetworkService.DELETE(NetworkService.apiDeleteData, id);
-    log(result);
     if(result == "200" || result == "201"){
-      log(result);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${id.toString()} Successfully deleted")));
     }
     await getAllData();
@@ -61,28 +66,112 @@ class _HomePageState extends State<HomePage> {
             ? ListView.separated(
                 padding: EdgeInsets.zero,
                 itemBuilder: (_, index) {
-                  var item = productModel[index];
+                  var item = productList[index];
                   return ListTile(
-                    title: Text(item.name),
-                    subtitle: Text("Price: ${item.cost}"),
-                    // leading: Row(
-                    //   mainAxisSize: MainAxisSize.min,
-                    //   children: [
-                    //     Text("${index+1}. ", style: const TextStyle(
-                    //       fontWeight: FontWeight.w700,
-                    //       fontSize: 20,
-                    //     ),),
-                    //     Image.network(
-                    //       item.thumbnail,
-                    //       fit: BoxFit.cover,
-                    //     ),
-                    //   ],
-                    // ),
-                    trailing: IconButton(
-                      icon: const Icon(CupertinoIcons.delete),
-                      onPressed: ()async{
-                        await deleteData(int.parse(item.id));
-                      },
+                    title: Text(item.title ?? ""),
+                    subtitle: Text("Price: ${item.price}"),
+                    leading: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text("${index+1}. ", style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                        ),),
+                        Image.network(
+                          item.thumbnail ?? "https://cdn.dummyjson.com/product-images/10/thumbnail.jpeg",
+                          fit: BoxFit.cover,
+                        ),
+                      ],
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(CupertinoIcons.pencil),
+                          onPressed: (){
+
+                            titleController.text = item.title ?? "No title";
+                            descController.text = item.description ?? "No description";
+                            priceController.text = item.price.toString();
+
+                            showDialog(
+                              context: context,
+                              builder: (context){
+                                return AlertDialog(
+                                  title: const Text("Update item"),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+
+                                      // title
+                                      TextField(
+                                        controller: titleController,
+                                        decoration: const InputDecoration(
+                                          hintText: "Name",
+                                        ),
+                                      ),
+
+                                      // desc
+                                      TextField(
+                                        controller: descController,
+                                        decoration: const InputDecoration(
+                                          hintText: "Description",
+                                        ),
+                                      ),
+
+
+                                      // price
+                                      TextField(
+                                        controller: priceController,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(
+                                          hintText: "Price",
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    IconButton(
+                                      onPressed: (){
+                                        Navigator.pop(context);
+                                      },
+                                      icon: const Text("Close"),
+                                    ),
+                                    IconButton(
+                                      onPressed: ()async{
+
+                                        if(titleController.text.isNotEmpty && descController.text.isNotEmpty && priceController.text.isNotEmpty){
+                                          ProductModel product = ProductModel(
+                                            title: titleController.text.trim(),
+                                            description: descController.text.trim(),
+                                            thumbnail: "https://cdn.dummyjson.com/product-images/10/thumbnail.jpeg",
+                                            price: int.parse(priceController.text.trim()),
+                                          );
+                                          await NetworkService.PUT(NetworkService.apiPutData, product.toJson(), item.id ?? "0");
+                                          await getAllData().then((value) {
+                                            Navigator.pop(context);
+                                          });
+                                          setState(() {});
+                                        }else{
+                                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all the gaps")));
+                                        }
+                                      },
+                                      icon: const Text("Save"),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(CupertinoIcons.delete),
+                          onPressed: ()async{
+                            await deleteData(int.parse(item.id ?? "0"));
+                          },
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -103,11 +192,84 @@ class _HomePageState extends State<HomePage> {
                   }
                   return const Divider();
                 },
-                itemCount: productModel.length,
+                itemCount: productList.length,
               )
             : const Center(
                 child: CircularProgressIndicator(),
               ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: (){
+          showDialog(
+              context: context,
+              builder: (context){
+                return AlertDialog(
+                  title: const Text("Adding new item"),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      
+                      // title
+                      TextField(
+                        controller: titleController,
+                        decoration: const InputDecoration(
+                          hintText: "Name",
+                        ),
+                      ),
+
+                      // desc
+                      TextField(
+                        controller: descController,
+                        decoration: const InputDecoration(
+                          hintText: "Description",
+                        ),
+                      ),
+
+                      
+                      // price
+                      TextField(
+                        controller: priceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          hintText: "Price",
+                        ),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    IconButton(
+                      onPressed: ()async{
+                        
+                        if(titleController.text.isNotEmpty && descController.text.isNotEmpty && priceController.text.isNotEmpty){
+                          ProductModel product = ProductModel(
+                              title: titleController.text.trim(),
+                              description: descController.text.trim(),
+                              thumbnail: "https://cdn.dummyjson.com/product-images/10/thumbnail.jpeg",
+                              price: int.parse(priceController.text.trim()),
+                          );
+                          await NetworkService.POST(NetworkService.apiPostData, product.toJson());
+                          await getAllData().then((value) {
+                            Navigator.pop(context);
+                          });
+                          setState(() {});
+                        }else{
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all the gaps")));
+                        }
+                      },
+                      icon: const Text("Save"),
+                    ),
+                    IconButton(
+                      onPressed: (){
+                        Navigator.pop(context);
+                      },
+                      icon: const Text("Close"),
+                    ),
+                  ],
+                );
+              },
+          );
+        },
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
